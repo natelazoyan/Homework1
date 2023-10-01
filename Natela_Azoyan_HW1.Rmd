@@ -1,0 +1,94 @@
+---
+title: "Natela_Azoyan_HW1"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-10-01"
+---
+
+## R Markdown
+
+The innovation I have chosen is the Heat-Free Hair Dryer, exemplified by the Zuvi Halo. Unlike traditional handheld hair dryers that use hot air to dry hair, the Heat-Free Hair Dryer employs infrared-light technology to mimic the natural evaporation process. This technology allows the device to operate at lower temperatures while effectively drying the hair, reducing heat damage, increasing internal hair moisture, and longer-lasting hair color. The Heat-Free Hair Dryer is energy-efficient, using up to 60% less energy than traditional dryers, making it a more eco-friendly option for hair drying.
+Now, to answer your question: A look-alike innovation from the past could be introducing ceramic heating elements in traditional hair dryers. When incorporated into hair dryers, ceramic heating elements allow for more even and controlled heat distribution, reducing the risk of overheating and damage to the hair. This innovation addressed some of the concerns related to heat damage, similar to the Heat-Free Hair Dryer. However, while ceramic heating elements were a notable improvement in traditional dryers, they still relied on hot air to dry the hair, fundamentally different from the Heat-Free Hair Dryer's infrared-light technology for more efficient and less damaging drying.
+
+```{r setup, include = FALSE}
+libs<-c('ggplot2','ggpubr','knitr','diffusion', 'readxl')
+load_libraries<-function(libs){
+new_libs <- libs[!(libs %in% installed.packages()[,"Package"])]
+if(length(new_libs)>0) {install.packages(new_libs)}
+lapply(libs, library, character.only = TRUE)
+}
+load_libraries(libs)
+
+library(dplyr)
+```
+
+
+```{r}
+hd <- read_excel("Hair-Dryer.xlsx")
+hd
+```
+
+I have chosen Retail unit sales of hair dryers in the United States from 2010 to 2018 (in millions) from Statista (Hair dryers US retail unit sales 2010-2018 | Statista). It reflects consumer behavior and demand for hair-drying solutions during the specified period. By examining it, we can gain insights into how the new heat-free hair dryer sales can be in the US. Also, tracking the retail unit sales of hair dryers during this period allows us to observe any noticeable changes in market share or sales trends, which the adoption of innovative technologies like infrared-light hair dryers might influence.
+Besides, a lack of significant changes in the sales of traditional hair dryers might indicate that consumers were receptive to the innovation. Therefore, analyzing the retail unit sales time series can provide insights into how well the market received heat-free hair dryer technology and whether it impacted the sales of traditional models.
+In conclusion, the retail unit sales of hair dryers in the United States from 2010 to 2018 serve as a valuable time series to approximate the impact of the Heat-Free Hair Dryer in the industry. By analyzing this data, researchers can gain insights into consumer adoption patterns and market dynamics in response to innovations that reduce heat damage and improve hair drying efficiency.
+
+```{r}
+hd_sales = ggplot(data = hd, aes(x = Year, y = Sales)) + geom_bar(stat = 'identity')  + ggtitle('HairDryer Sales in the US, mln units')
+hd_sales
+```
+
+
+```{r}
+library(diffusion)
+parameters <- diffusion(hd$Sales)
+p<-parameters$w['p']
+q<-parameters$w['q']
+m<-parameters$w
+parameters
+```
+
+```{r}
+bass.f <- function(t,p,q){ ((p+q)**2/p)*exp(-(p+q)*t)/ (1+(q/p)*exp(-(p+q)*t))**2 }
+bass.F <- function(t,p,q){ (1-exp(-(p+q)*t))/ (1+(q/p)*exp(-(p+q)*t))}
+```
+
+```{r}
+hd$prediction <- bass.f(1:9, p = p, q = q)*m
+ggplot(data = hd, aes(x = Year, y = Sales)) + geom_bar(stat = 'identity') + ylab("Sales, mln units") + geom_point(aes(x=Year, y = prediction), col = 'red')
+```
+
+```{r}
+sales = hd$Sales
+t = 1:length(sales)
+bass_m = nls(sales ~ m*(((p+q)**2/p)*exp(-(p+q)*t))/(1+(q/p)*exp(-(p+q)*t))**2,
+start=c(list(m=sum(sales),p=0.03,q=0.4)), control = list(maxiter = 2000, tol = 8))
+bass_m
+```
+
+```{r}
+m <- bass_m$m$getPars()['m']
+p <- bass_m$m$getPars()['p']
+q <- bass_m$m$getPars()['q']
+hd$predictions <- bass.f(1:9, p = p, q = q)*m
+ggplot(data = hd, aes(x = Year, y = Sales)) +
+geom_bar(stat = 'identity') + ylab("Sales million units") +
+geom_point(aes(x=Year, y = predictions), col = 'red')
+```
+
+#With NLS it looks way better. 
+
+The population in the U.S. is 334,233,854 (Happy New Year 2023! (census.gov)). 50.4% of the U.S. population is women (U.S. Census Bureau QuickFacts: United States), which means 168,453,862 of the U.S. population are women, and 165,779,992 are male. 60% of the women and 20% of the men use hair dryers. Therefore, 33,155,998 males and 101,072,317 females use hair dryers. Each household in the U.S. consists of 3.13 people (TestHut.com | What Is the Average Size of an American Family: Interesting Statistics & Facts), so we are left with around 42 million people. We assume that Heat-Free Hair Dryer would afford families that belong to the middle-upper class, which is around 50% of the U.S. population (Middle class keeps its size, loses financial ground to upper-income tier | Pew Research Center). We are left with 21 million households, assuming each would need one of these new hairdryers. Therefore our market size is 21mln. 
+
+```{r}
+m <- 21000000
+t <- c(1:10)
+pred <- bass.f(t = t, p = p, q = q)*m
+pred_df <- data.frame(t = t, pred = pred)
+pred1 <- bass.F(t = t, p = p, q = q)
+pred1_df <- data.frame(t = t, pred = pred1)
+p1 <- ggplot(pred_df, aes(x = t, y = pred)) + geom_line() + ggtitle("Number of adoptions at time t")
+p2<- ggplot(pred1_df, aes(x = t, y = pred1)) + geom_line() + ggtitle("Cummulative addoptions")
+
+ggarrange(p1,p2)
+```
